@@ -84,8 +84,16 @@ export class Component {
         this.render()[RENDER_TO_DOM](range)
     }
     rerender() {
-        this._range.deleteContents()
-        this[RENDER_TO_DOM](this._range)
+        //解决range合并的问题，但在我的机器上并未出现这个问题。
+        let oldRange = this._range
+
+        let range = document.createRange()
+        range.setStart(this._range.startContainer, this._range.startOffset)
+        range.setEnd(this._range.startContainer, this._range.startOffset)
+        this[RENDER_TO_DOM](range)
+
+        oldRange.setStart(range.endContainer, range.endOffset)
+        oldRange.deleteContents()
     }
     setState(newState) {
         if(this.state === null || typeof this.state !== 'object') {
