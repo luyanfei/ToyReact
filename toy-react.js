@@ -1,9 +1,64 @@
 const RENDER_TO_DOM = Symbol("render to dom")
 
-class ElementWrapper {
+export class Component {
+    constructor() {
+        this.props = Object.create(null)
+        this.children = []
+        this._root = null
+        this._range = null
+    }
+    setAttribute(name, value) {
+        this.props[name] = value
+    }
+    appendChild(component) {
+        this.children.push(component)
+    }
+    [RENDER_TO_DOM](range) {
+        this._range = range
+        this.render()[RENDER_TO_DOM](range)
+    }
+    get vdom() {
+        return this.render().vdom
+    }
+    rerender() {
+        //解决range合并的问题，但在我的机器上并未出现这个问题。
+        let oldRange = this._range
+
+        let range = document.createRange()
+        range.setStart(this._range.startContainer, this._range.startOffset)
+        range.setEnd(this._range.startContainer, this._range.startOffset)
+        this[RENDER_TO_DOM](range)
+
+        oldRange.setStart(range.endContainer, range.endOffset)
+        oldRange.deleteContents()
+    }
+    setState(newState) {
+        if(this.state === null || typeof this.state !== 'object') {
+            this.state = newState
+            this.rerender()
+            return
+        }
+        let merge = (oldState, newState) => {
+            for(let p in newState) {
+                if(oldState[p] === null || typeof oldState[p] !== 'object'){
+                    oldState[p] = newState[p]
+                } else {
+                    merge(oldState[p], newState[p])
+                }
+            }
+        }
+        merge(this.state, newState)
+        this.rerender()
+    }
+}
+
+class ElementWrapper extends Component{
     constructor(type) {
+        super(type)
+        this.type = type
         this.root = document.createElement(type)
     }
+    /*
     setAttribute(name, value) {
         if(name.match(/^on([\s\S]+)/)) {
             this.root.addEventListener(RegExp.$1.replace(/^[\s\S]/, c => c.toLowerCase()), value)
@@ -21,15 +76,31 @@ class ElementWrapper {
         range.setEnd(this.root, this.root.childNodes.length)
         component[RENDER_TO_DOM](range)    
     }
+    */
+    get vdom() {
+        return {
+            type: this.type,
+            props: this.props,
+            children: this.children.map(child => child.vdom)
+        }
+    }
     [RENDER_TO_DOM](range) {
         range.deleteContents()
         range.insertNode(this.root)
     }
 }
 
-class TextWrapper {
+class TextWrapper extends Component{
     constructor(content) {
+        super(content)
+        this.content = content
         this.root = document.createTextNode(content)
+    }
+    get vdom() {
+        return {
+            type: '#text',
+            content: this.content
+        }
     }
     [RENDER_TO_DOM](range) {
         range.deleteContents()
@@ -64,55 +135,6 @@ export function createElement(type, attributes, ...children) {
     }
     insertChildren(children)
     return e
-}
-
-export class Component {
-    constructor() {
-        this.props = Object.create(null)
-        this.children = []
-        this._root = null
-        this._range = null
-    }
-    setAttribute(name, value) {
-        this.props[name] = value
-    }
-    appendChild(component) {
-        this.children.push(component)
-    }
-    [RENDER_TO_DOM](range) {
-        this._range = range
-        this.render()[RENDER_TO_DOM](range)
-    }
-    rerender() {
-        //解决range合并的问题，但在我的机器上并未出现这个问题。
-        let oldRange = this._range
-
-        let range = document.createRange()
-        range.setStart(this._range.startContainer, this._range.startOffset)
-        range.setEnd(this._range.startContainer, this._range.startOffset)
-        this[RENDER_TO_DOM](range)
-
-        oldRange.setStart(range.endContainer, range.endOffset)
-        oldRange.deleteContents()
-    }
-    setState(newState) {
-        if(this.state === null || typeof this.state !== 'object') {
-            this.state = newState
-            this.rerender()
-            return
-        }
-        let merge = (oldState, newState) => {
-            for(let p in newState) {
-                if(oldState[p] === null || typeof oldState[p] !== 'object'){
-                    oldState[p] = newState[p]
-                } else {
-                    merge(oldState[p], newState[p])
-                }
-            }
-        }
-        merge(this.state, newState)
-        this.rerender()
-    }
 }
 
 export function render(component, parentElement) {
